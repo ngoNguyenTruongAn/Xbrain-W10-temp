@@ -1,5 +1,5 @@
 apiVersion: constraints.gatekeeper.sh/v1beta1
-kind: K8sRequiredResourceLimits
+kind: K8sRequiredResources
 metadata:
   name: required-resource-limits
   annotations:
@@ -11,7 +11,9 @@ spec:
     kinds:
     - apiGroups: [""]
       kinds: ["Pod"]
-    excludedNamespaces:
-    - kube-system
-    - argocd
-    - gatekeeper-system
+    namespaces:
+    - demo
+  parameters:
+    limits:
+    - cpu
+    - memory

@@ -1,5 +1,5 @@
 apiVersion: constraints.gatekeeper.sh/v1beta1
-kind: K8sDisallowRunAsRoot
+kind: K8sPSPAllowedUsers
 metadata:
   name: disallow-run-as-root
   annotations:
@@ -11,7 +11,14 @@ spec:
     kinds:
     - apiGroups: [""]
       kinds: ["Pod"]
-    excludedNamespaces:
-    - kube-system
-    - argocd
-    - gatekeeper-system
+    namespaces:
+    - demo
+  parameters:
+    runAsUser:
+      rule: MustRunAsNonRoot
+    runAsGroup:
+      rule: RunAsAny
+    supplementalGroups:
+      rule: RunAsAny
+    fsGroup:
+      rule: RunAsAny

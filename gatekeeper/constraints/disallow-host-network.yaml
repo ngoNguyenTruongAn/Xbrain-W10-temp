@@ -1,5 +1,5 @@
 apiVersion: constraints.gatekeeper.sh/v1beta1
-kind: K8sDisallowHostNetwork
+kind: K8sPSPHostNetworkingPorts
 metadata:
   name: disallow-host-network
   annotations:
@@ -11,7 +11,7 @@ spec:
     kinds:
     - apiGroups: [""]
       kinds: ["Pod"]
-    excludedNamespaces:
-    - kube-system
-    - argocd
-    - gatekeeper-system
+    namespaces:
+    - demo
+  parameters:
+    hostNetwork: false
