@@ -1,0 +1,125 @@
+# RBAC roles for W10 Lab 1.1
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+  namespace: demo
+rules:
+# Alice can manage core workload resources inside demo namespace only.
+- apiGroups: [""]
+  resources:
+  - pods
+  - services
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+
+# Alice can manage Deployment-style workloads inside demo namespace only.
+- apiGroups: ["apps"]
+  resources:
+  - deployments
+  - replicasets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+
+# Optional but useful because this repo uses Argo Rollouts instead of plain Deployment.
+- apiGroups: ["argoproj.io"]
+  resources:
+  - rollouts
+  - analysisruns
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sre-pod-operator
+rules:
+# Bob can inspect and operate Pods across all namespaces.
+- apiGroups: [""]
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+  - delete
+
+# Bob can read Pod logs across all namespaces.
+- apiGroups: [""]
+  resources:
+  - pods/log
+  verbs:
+  - get
+
+# Bob can inspect events for troubleshooting.
+- apiGroups: [""]
+  resources:
+  - events
+  verbs:
+  - get
+  - list
+  - watch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-viewer
+rules:
+# Carol can read common core resources cluster-wide.
+- apiGroups: [""]
+  resources:
+  - pods
+  - services
+  - configmaps
+  - namespaces
+  - events
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+
+# Carol can read common application workloads cluster-wide.
+- apiGroups: ["apps"]
+  resources:
+  - deployments
+  - replicasets
+  - statefulsets
+  - daemonsets
+  verbs:
+  - get
+  - list
+  - watch
+
+# Carol can read Argo Rollouts resources.
+- apiGroups: ["argoproj.io"]
+  resources:
+  - rollouts
+  - analysisruns
+  - analysistemplates
+  verbs:
+  - get
+  - list
+  - watch
