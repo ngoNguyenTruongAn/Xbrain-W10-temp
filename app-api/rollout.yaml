@@ -19,6 +19,8 @@ spec:
       labels:
         app: api
     spec:
+      securityContext:
+      runAsUser: 1000
       containers:
       - name: api
         image: ghcr.io/ngoNguyenTruongAn/w10-api:0.0.1
