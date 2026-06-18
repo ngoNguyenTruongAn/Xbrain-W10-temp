@@ -1,19 +1,17 @@
-# ArgoCD App: Deploy Gatekeeper ConstraintTemplates and Constraints
+# ArgoCD App: Deploy Gatekeeper Constraints
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: gatekeeper-policies
+  name: gatekeeper-constraints
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   project: default
   source:
     repoURL: https://github.com/ngoNguyenTruongAn/Xbrain-W10-temp.git
-    path: gatekeeper
+    path: gatekeeper/constraints
     targetRevision: main
-    directory:
-      recurse: true
   destination:
     server: https://kubernetes.default.svc
     namespace: gatekeeper-system
@@ -23,3 +21,4 @@ spec:
       selfHeal: true
     syncOptions:
     - ServerSideApply=true
+    - SkipDryRunOnMissingResource=true
