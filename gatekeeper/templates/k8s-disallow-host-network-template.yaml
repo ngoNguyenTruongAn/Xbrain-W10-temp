@@ -19,6 +19,7 @@ spec:
       package k8sdisallowhostnetwork
 
       violation[{"msg": msg}] {
-        input.review.object.spec.hostNetwork == true
-        msg := "spec.hostNetwork must not be true"
+        pod := input.review.object
+        pod.spec.hostNetwork == true
+        msg := sprintf("pod <%s> must not set spec.hostNetwork=true", [pod.metadata.name])
       }
