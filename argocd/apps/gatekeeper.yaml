@@ -8,6 +8,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "0"
 spec:
   project: default
+
   source:
     repoURL: https://open-policy-agent.github.io/gatekeeper/charts
     chart: gatekeeper
@@ -39,14 +40,20 @@ spec:
     namespace: gatekeeper-system
 
   ignoreDifferences:
+  # Gatekeeper CRDs are large and Kubernetes/Gatekeeper may normalize or mutate
+  # parts of their generated schema/webhook configuration after installation.
+  # This avoids permanent OutOfSync while keeping the controller Healthy.
   - group: apiextensions.k8s.io
     kind: CustomResourceDefinition
-    jqPathExpressions:
-    - '.spec.conversion.webhook.clientConfig.caBundle'
+    jsonPointers:
+    - /spec
+
+  # Admission webhook CA bundles are usually injected/updated in the live cluster.
   - group: admissionregistration.k8s.io
     kind: ValidatingWebhookConfiguration
     jqPathExpressions:
     - '.webhooks[]?.clientConfig.caBundle'
+
   - group: admissionregistration.k8s.io
     kind: MutatingWebhookConfiguration
     jqPathExpressions:
@@ -59,3 +66,4 @@ spec:
     syncOptions:
     - CreateNamespace=true
     - ServerSideApply=true
+    - RespectIgnoreDifferences=true
