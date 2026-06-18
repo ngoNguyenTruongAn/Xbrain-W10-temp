@@ -19,18 +19,21 @@ spec:
       package k8sdisallowrunasroot
 
       violation[{"msg": msg}] {
-        input.review.object.spec.securityContext.runAsUser == 0
+        pod := input.review.object
+        pod.spec.securityContext.runAsUser == 0
         msg := "pod-level securityContext.runAsUser must not be 0"
       }
 
       violation[{"msg": msg}] {
-        container := input.review.object.spec.containers[_]
+        pod := input.review.object
+        container := pod.spec.containers[_]
         container.securityContext.runAsUser == 0
         msg := sprintf("container <%s> securityContext.runAsUser must not be 0", [container.name])
       }
 
       violation[{"msg": msg}] {
-        container := input.review.object.spec.initContainers[_]
-        container.securityContext.runAsUser == 0
-        msg := sprintf("initContainer <%s> securityContext.runAsUser must not be 0", [container.name])
+        pod := input.review.object
+        initContainer := pod.spec.initContainers[_]
+        initContainer.securityContext.runAsUser == 0
+        msg := sprintf("initContainer <%s> securityContext.runAsUser must not be 0", [initContainer.name])
       }
