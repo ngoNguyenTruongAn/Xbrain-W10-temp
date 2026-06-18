@@ -15,3 +15,5 @@ spec:
     - demo
   parameters:
     hostNetwork: false
+    min: 0
+    max: 0
