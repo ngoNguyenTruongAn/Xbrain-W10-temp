@@ -13,3 +13,38 @@ k8s-monitoring/alertmanager-config.yaml
 
 cosign.key
 *.key
+# Private keys / signing secrets
+cosign.key
+*.key
+*.pem
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# AWS / cloud credentials
+aws-credentials.yaml
+aws-credentials.yml
+*aws*credential*
+*secret-access-key*
+*access-key*
+
+# Tokens / local secret files
+*token*
+*secret*
+*.kubeconfig
+
+# Temporary troubleshooting files
+policy-controller-disable-probe.json
+policy-controller-probe-patch.json
+policy-controller-toleration-patch.json
+patch-api-replicas.json
+gatekeeper-status.yaml
+policy-controller-crds.yaml
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json

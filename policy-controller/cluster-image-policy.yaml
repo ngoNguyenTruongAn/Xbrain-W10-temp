@@ -1,0 +1,22 @@
+apiVersion: policy.sigstore.dev/v1beta1
+kind: ClusterImagePolicy
+metadata:
+  name: require-signed-images-demo
+spec:
+  images:
+    - glob: "ghcr.io/ngonguyentruongan/w10-api:*"
+    - glob: "ghcr.io/ngonguyentruongan/w10-api:*@sha256:*"
+    - glob: "ghcr.io/ngonguyentruongan/w10-api@sha256:*"
+    - glob: "nginx:*"
+    - glob: "nginx:*@sha256:*"
+    - glob: "docker.io/library/nginx:*"
+    - glob: "docker.io/library/nginx:*@sha256:*"
+    - glob: "index.docker.io/library/nginx:*"
+    - glob: "index.docker.io/library/nginx:*@sha256:*"
+  authorities:
+    - key:
+        data: |
+              -----BEGIN PUBLIC KEY-----
+              MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEVI54fkelhLrBB3rh1DIP5BTXS/1M
+              LPma17y3S13mhC0Pipwk4WYU/7TZ50dO7Ves7cZIyvA8ZpC95mNDagwpUA==
+              -----END PUBLIC KEY-----
