@@ -1216,3 +1216,560 @@ Deployment vi phạm bị reject và Deployment hợp lệ được allow.
 
 Tất cả thay đổi được quản lý qua Git và ArgoCD theo mô hình GitOps.
 ```
+# Lab 2 Evidence — Secrets Management & Supply Chain Security
+
+## Lab 2.1 — External Secrets Operator với AWS Secrets Manager
+
+### Mục tiêu
+
+Mục tiêu của Lab 2.1 là sử dụng External Secrets Operator để đồng bộ secret từ AWS Secrets Manager về Kubernetes. Sau đó thực hiện rotation secret trên AWS và kiểm tra Kubernetes Secret có được cập nhật tự động hay không.
+
+Luồng hoạt động:
+
+```text
+AWS Secrets Manager
+        ↓
+External Secrets Operator
+        ↓
+ExternalSecret db-creds
+        ↓
+Kubernetes Secret db-secret
+        ↓
+Application / Pod
+```
+
+---
+
+## 2.1.1 Cài đặt External Secrets Operator thành công
+
+External Secrets Operator đã được cài vào namespace `external-secrets`.
+
+Lệnh kiểm tra:
+
+```powershell
+kubectl get pods -n external-secrets --request-timeout=120s
+```
+
+Kết quả mong đợi:
+
+```text
+eso-external-secrets                    1/1   Running
+eso-external-secrets-cert-controller    1/1   Running
+eso-external-secrets-webhook            1/1   Running
+```
+
+Evidence:
+
+![ESO Pods](./ScreenShot/ESO%20Pods.jpg)
+
+---
+
+## 2.1.2 Kiểm tra CRD của ESO
+
+Các CRD cần thiết của External Secrets Operator đã được cài đặt thành công.
+
+Lệnh kiểm tra:
+
+```powershell
+kubectl api-resources | Select-String "externalsecret|secretstore"
+```
+
+Kết quả có các resource:
+
+```text
+externalsecrets
+secretstores
+clusterexternalsecrets
+clustersecretstores
+```
+
+Evidence:
+
+![ESO CRDs](./ScreenShot/ESO%20CRDs.jpg)
+
+---
+
+## 2.1.3 Cấu hình SecretStore và ExternalSecret
+
+Trong namespace `demo`, hệ thống sử dụng:
+
+```text
+SecretStore: aws-store
+ExternalSecret: db-creds
+Kubernetes Secret: db-secret
+AWS Secrets Manager secret: prod/db/password
+```
+
+Lệnh kiểm tra:
+
+```powershell
+kubectl get secretstore aws-store -n demo --request-timeout=120s
+kubectl get externalsecret db-creds -n demo --request-timeout=120s
+```
+
+Kết quả cho thấy `SecretStore` và `ExternalSecret` hoạt động bình thường.
+
+Evidence:
+
+![ESO Config Healthy](./ScreenShot/ESO%20Config%20Healthy.jpg)
+
+---
+
+## 2.1.4 Kubernetes Secret được tạo bởi ESO
+
+External Secrets Operator đã tạo Kubernetes Secret `db-secret` trong namespace `demo`.
+
+Lệnh kiểm tra:
+
+```powershell
+kubectl get secret db-secret -n demo --request-timeout=120s
+```
+
+Kết quả:
+
+```text
+NAME        TYPE     DATA   AGE
+db-secret   Opaque   1      ...
+```
+
+Evidence:
+
+![DB Secret Created](./ScreenShot/DB%20Secret%20Created.jpg)
+
+---
+
+## 2.1.5 Giá trị secret ban đầu được sync thành công
+
+Giá trị ban đầu từ AWS Secrets Manager đã được sync về Kubernetes Secret.
+
+Lệnh decode secret:
+
+```powershell
+kubectl get secret db-secret -n demo -o jsonpath="{.data.password}" | %{ [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($_)) }
+```
+
+Kết quả ban đầu:
+
+```text
+MyS3cr3tP@ss
+```
+
+Evidence:
+
+![Initial Secret Value](./ScreenShot/Initial%20Secret%20Value.jpg)
+
+---
+
+## 2.1.6 Rotation secret trên AWS Secrets Manager
+
+Secret trong AWS Secrets Manager được cập nhật sang giá trị mới.
+
+Lệnh thực hiện:
+
+```powershell
+aws secretsmanager update-secret `
+  --secret-id prod/db/password `
+  --secret-string "NewP@ss123" `
+  --region ap-southeast-1
+```
+
+Kết quả trả về có `ARN`, `Name`, và `VersionId`, chứng minh secret trên AWS đã được update thành công.
+
+Evidence:
+
+![AWS Secret Updated](./ScreenShot/AWS%20Secret%20Updated.jpg)
+
+---
+
+## 2.1.7 Kubernetes Secret được cập nhật sau rotation
+
+Sau khi chờ ESO refresh, kiểm tra lại Kubernetes Secret.
+
+Lệnh decode lại secret:
+
+```powershell
+kubectl get secret db-secret -n demo -o jsonpath="{.data.password}" | %{ [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($_)) }
+```
+
+Kết quả sau rotation:
+
+```text
+NewP@ss123
+```
+
+Evidence:
+
+![Rotated Secret Value](./ScreenShot/Rotated%20Secret%20Value.jpg)
+
+---
+
+## 2.1.8 Kết luận Lab 2.1
+
+Lab 2.1 đã hoàn thành thành công.
+
+External Secrets Operator đã sync secret từ AWS Secrets Manager về Kubernetes. Sau khi secret trong AWS Secrets Manager được update, Kubernetes Secret `db-secret` cũng được cập nhật theo sau khoảng thời gian refresh.
+
+Kết quả cuối cùng:
+
+```text
+Before rotation: MyS3cr3tP@ss
+After rotation:  NewP@ss123
+```
+
+Điều này chứng minh cơ chế secret rotation hoạt động đúng.
+
+---
+
+# Lab 2.2 — Trivy, Cosign và Supply Chain Security
+
+## Mục tiêu
+
+Mục tiêu của Lab 2.2 là bảo vệ container supply chain bằng cách sử dụng:
+
+```text
+Trivy                  → scan vulnerability
+GitHub Container Registry → lưu image
+Cosign                 → ký và verify image
+Sigstore Policy Controller → enforce signed image trong Kubernetes
+```
+
+Luồng CI/CD:
+
+```text
+Build Docker image
+        ↓
+Trivy scan
+        ↓
+Push image to GHCR
+        ↓
+Cosign sign
+        ↓
+Cosign verify
+        ↓
+Kubernetes admission policy
+```
+
+---
+
+## 2.2.1 GitHub Actions Pipeline đã được cập nhật
+
+Workflow `.github/workflows/build-push.yml` đã được cập nhật để thực hiện các bước:
+
+```text
+Build Docker image locally
+Scan image with Trivy
+Push Docker image to GHCR
+Install Cosign
+Sign image with Cosign
+Verify image signature
+Update rollout.yaml
+```
+
+Evidence:
+
+![GitHub Actions Workflow](./ScreenShot/GitHub%20Actions%20Workflow.jpg)
+
+---
+
+## 2.2.2 Trivy Scan thành công
+
+Image được scan bằng Trivy trong GitHub Actions. Pipeline được cấu hình để fail nếu phát hiện vulnerability mức `HIGH` hoặc `CRITICAL`.
+
+Workflow step:
+
+```text
+Scan image with Trivy
+```
+
+Kết quả workflow pass, chứng minh image vượt qua bước scan.
+
+Evidence:
+
+![Trivy Scan Pass](./ScreenShot/GitHub%20Actions%20Workflow.jpg)
+
+---
+
+## 2.2.3 Image được push lên GHCR
+
+Sau khi Trivy scan pass, image được push lên GitHub Container Registry.
+
+Image:
+
+```text
+ghcr.io/ngonguyentruongan/w10-api:0.0.1
+```
+
+Evidence:
+
+![GHCR Image](./ScreenShot/GHCR%20Image.jpg)
+
+---
+
+## 2.2.4 Image được ký bằng Cosign
+
+Image được ký bằng Cosign. Private key được lưu trong GitHub Actions Secret, không commit lên Git.
+
+File public key được commit:
+
+```text
+signing/cosign.pub
+```
+
+File private key không được commit:
+
+```text
+cosign.key
+```
+
+Evidence:
+
+![Cosign Sign Pass](./ScreenShot/GitHub%20Actions%20Workflow.jpg)
+
+---
+
+## 2.2.5 Verify chữ ký image thành công
+
+Image đã ký được verify bằng public key.
+
+Lệnh verify:
+
+```powershell
+cosign verify --key signing/cosign.pub ghcr.io/ngonguyentruongan/w10-api@sha256:de3471737c341212588d8ddc616f85dc64164eb0240eacadb846e8b0c8266033
+```
+
+Kết quả verify:
+
+```text
+The cosign claims were validated
+Existence of the claims in the transparency log was verified offline
+The signatures were verified against the specified public key
+```
+
+Evidence:
+
+![Cosign Verify Digest Success](./ScreenShot/Cosign%20Verify%20Digest%20Success.jpg)
+
+---
+
+## 2.2.6 Rollout sử dụng signed image
+
+File `app-api/rollout.yaml` đã được cập nhật để sử dụng image từ GHCR.
+
+Lệnh kiểm tra:
+
+```powershell
+Get-Content .\app-api\rollout.yaml | Select-String "image:"
+```
+
+Kết quả:
+
+```text
+image: ghcr.io/ngonguyentruongan/w10-api:0.0.2
+```
+
+Evidence:
+
+![Signed Image In Rollout](./ScreenShot/Signed%20Image%20In%20Rollout.jpg)
+
+---
+
+## 2.2.7 Cài đặt Sigstore Policy Controller thành công
+
+Sigstore Policy Controller được cài trong namespace `cosign-system`.
+
+Lệnh kiểm tra:
+
+```powershell
+kubectl get pods -n cosign-system --request-timeout=120s
+```
+
+Kết quả:
+
+```text
+policy-controller-webhook-xxxxx   1/1   Running
+```
+
+Evidence:
+
+![Policy Controller Running](./ScreenShot/Policy%20Controller%20Running.jpg)
+
+---
+
+## 2.2.8 CRD của Policy Controller đã tồn tại
+
+Các CRD cần thiết của Sigstore Policy Controller đã được cài đặt.
+
+Lệnh kiểm tra:
+
+```powershell
+kubectl get crd | Select-String "policy.sigstore"
+```
+
+Kết quả:
+
+```text
+clusterimagepolicies.policy.sigstore.dev
+trustroots.policy.sigstore.dev
+```
+
+Lệnh kiểm tra API resource:
+
+```powershell
+kubectl api-resources | Select-String "clusterimagepolicy"
+```
+
+Kết quả:
+
+```text
+clusterimagepolicies
+```
+
+Evidence:
+
+![Policy Controller CRDs](./ScreenShot/Policy%20Controller%20CRDs.jpg)
+
+---
+
+## 2.2.9 Namespace demo được bật policy enforcement
+
+Namespace `demo` được label để Sigstore Policy Controller enforce admission policy.
+
+Lệnh kiểm tra:
+
+```powershell
+kubectl get namespace demo --show-labels --request-timeout=120s
+```
+
+Label cần có:
+
+```text
+policy.sigstore.dev/include=true
+```
+
+Evidence:
+
+![Demo Namespace Policy Label](./ScreenShot/Demo%20Namespace%20Policy%20Label.jpg)
+
+---
+
+## 2.2.10 ClusterImagePolicy được tạo thành công
+
+Một `ClusterImagePolicy` tên `require-signed-images-demo` đã được tạo để enforce signed image.
+
+Lệnh kiểm tra:
+
+```powershell
+kubectl get clusterimagepolicy --request-timeout=120s
+```
+
+Kết quả:
+
+```text
+require-signed-images-demo
+```
+
+Evidence:
+
+![ClusterImagePolicy](./ScreenShot/ClusterImagePolicy.jpg)
+
+---
+
+## 2.2.11 Signed image được admission policy cho phép
+
+Test signed image bằng server-side dry run.
+
+Signed image sử dụng digest đã được ký:
+
+```text
+ghcr.io/ngonguyentruongan/w10-api@sha256:de3471737c341212588d8ddc616f85dc64164eb0240eacadb846e8b0c8266033
+```
+
+Lệnh test:
+
+```powershell
+kubectl apply -f .\signed-w10-api-test.yaml --dry-run=server --request-timeout=120s
+```
+
+Kết quả:
+
+```text
+pod/signed-w10-api-test created (server dry run)
+```
+
+Điều này chứng minh image đã ký được admission policy cho phép.
+
+Evidence:
+
+![Signed Image Admission Pass](./ScreenShot/Signed%20Image%20Admission%20Pass.jpg)
+
+---
+
+## 2.2.12 Unsigned image bị admission policy từ chối
+
+Test unsigned image bằng server-side dry run.
+
+Lệnh test:
+
+```powershell
+kubectl apply -f .\unsigned-nginx-test.yaml --dry-run=server --request-timeout=120s
+```
+
+Kết quả:
+
+```text
+admission webhook "policy.sigstore.dev" denied the request:
+invalid value: nginx:1.25 must be an image digest
+```
+
+Điều này chứng minh image chưa ký hoặc không đúng policy bị từ chối bởi Sigstore Policy Controller.
+
+Evidence:
+
+![Unsigned Image Admission Reject](./ScreenShot/Unsigned%20Image%20Admission%20Reject.jpg)
+
+---
+
+## 2.2.13 Kết luận Lab 2.2
+
+Lab 2.2 đã hoàn thành thành công.
+
+Pipeline CI đã build image, scan bằng Trivy, push lên GHCR, ký bằng Cosign và verify chữ ký bằng public key. Sigstore Policy Controller đã được cài đặt và cấu hình trong Kubernetes. Signed image được admission policy cho phép, còn unsigned image bị từ chối.
+
+Kết quả cuối cùng:
+
+```text
+Signed image:   allowed
+Unsigned image: rejected
+```
+
+---
+
+# Lab 2 Final Checklist
+
+```text
+[✓] ESO manifests created
+[✓] External Secrets Operator installed
+[✓] AWS Secrets Manager sync completed
+[✓] Secret rotation completed
+[✓] signing/cosign.pub committed
+[✓] cosign.key not committed
+[✓] GitHub Actions workflow updated
+[✓] Trivy scan passed
+[✓] Image pushed to GHCR
+[✓] Image signed with Cosign
+[✓] Image verified with Cosign
+[✓] Sigstore Policy Controller installed
+[✓] ClusterImagePolicy created
+[✓] Signed image allowed
+[✓] Unsigned image rejected
+[✓] runbooks created
+[✓] exception ADR created
+```
+
+---
+
+# Kết luận cuối cùng
+
+Lab 2 đã hoàn thành thành công.
+
+External Secrets Operator chứng minh khả năng đồng bộ và rotation secret từ AWS Secrets Manager về Kubernetes. Supply Chain Security pipeline chứng minh image được scan vulnerability, ký bằng Cosign, verify chữ ký và enforce admission policy trong Kubernetes. Image đã ký được cho phép chạy, trong khi image chưa ký bị từ chối.
