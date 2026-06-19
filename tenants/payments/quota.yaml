@@ -1,0 +1,18 @@
+---
+# ResourceQuota cho namespace payments
+# Ngăn chặn team payments vượt quota tổng
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: payments-quota
+  namespace: payments
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: "4Gi"
+    limits.cpu: "4"
+    limits.memory: "8Gi"
+    pods: "10"
+    services: "5"
+    configmaps: "10"
+    secrets: "10"

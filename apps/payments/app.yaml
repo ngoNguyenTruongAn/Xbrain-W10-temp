@@ -1,0 +1,53 @@
+---
+# App hợp lệ cho team payments
+# Đã khai báo resources.limits, không dùng latest tag, runAsUser không phải root
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments-app
+  namespace: payments
+  labels:
+    app: payments-app
+    tenant: payments
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: payments-app
+  template:
+    metadata:
+      labels:
+        app: payments-app
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: payments-app
+          image: nginx:1.25
+          ports:
+            - containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payments-app
+  namespace: payments
+spec:
+  selector:
+    app: payments-app
+  ports:
+    - port: 8080
+      targetPort: 8080

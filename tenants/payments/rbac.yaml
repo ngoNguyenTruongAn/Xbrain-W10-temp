@@ -1,0 +1,50 @@
+---
+# Role cho payments-dev: least-privilege
+# Có thể tạo/sửa/xóa workload NHƯNG không được động secrets & rolebindings
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: payments-developer
+  namespace: payments
+rules:
+  # Workload resources
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/status"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  
+  - apiGroups: [""]
+    resources: ["services", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  
+  # Rollouts (nếu dùng Argo Rollouts)
+  - apiGroups: ["argoproj.io"]
+    resources: ["rollouts"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  
+  # KHÔNG cho phép động secrets
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]  # Chỉ đọc, KHÔNG create/update/delete
+  
+  # KHÔNG cho phép động RBAC
+  # (không list rules gì về roles, rolebindings)
+
+---
+# RoleBinding gán role cho user payments-dev
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: payments-developer-binding
+  namespace: payments
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: payments-developer
+subjects:
+  - kind: User
+    name: payments-dev
+    apiGroup: rbac.authorization.k8s.io

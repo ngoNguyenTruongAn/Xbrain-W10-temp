@@ -1,0 +1,46 @@
+---
+# NetworkPolicy: default-deny cho payments
+# Chặn tất cả ingress traffic vào payments
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: payments-default-deny-ingress
+  namespace: payments
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+
+---
+# NetworkPolicy: payments chỉ được gọi sang service api của demo
+# Cho phép egress đến demo namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: payments-allow-to-demo-api
+  namespace: payments
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    # Cho phép DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+    
+    # Cho phép gọi sang service api trong namespace demo
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: demo
+        - podSelector:
+            matchLabels:
+              app: api
+      ports:
+        - protocol: TCP
+          port: 8080
